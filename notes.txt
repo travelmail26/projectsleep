@@ -1,0 +1,9 @@
+
+
+#loading on local machine terminal
+
+cd /mnt/chromeos/MyFiles/Downloads
+source venv/bin/activate
+cd /mnt/chromeos/MyFiles/Downloads/code/muselseep
+
+keyringpass
