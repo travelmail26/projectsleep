@@ -7,3 +7,5 @@ source venv/bin/activate
 cd /mnt/chromeos/MyFiles/Downloads/code/muselseep
 
 keyringpass
+
+test notes edit on replit
