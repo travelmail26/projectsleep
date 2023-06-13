@@ -1,3 +1,5 @@
+#backup
+
 """
 Mind Monitor - OSC Receiver Audio Feedback
 Coded: James Clutterbuck (2021)
@@ -30,14 +32,22 @@ sound_file = "bell.mp3"
 #Plot Array
 plot_val_count = 200
 plot_data = [[0],[0],[0],[0],[0]]
-raw_data = [0]
 
 import collections
+
+
+
+
+
 counter = collections.Counter()
 
+import os
+
+# Initialize a global counter and a list to store the data
 datapoints_received = 0
 data_to_csv = []
 
+# Modify the print_data function
 def print_data(address, *args):
     global datapoints_received, data_to_csv
     counter[address] += 1
@@ -59,13 +69,15 @@ def print_data(address, *args):
         datapoints_received = 0
         data_to_csv = []
 
-def raw_handler(address: str, *args):
-    print ('raw handler triggered')
-    global raw_data
-    raw_data.append(args[0])
-    #print('Raw EEG data: ', raw_data)
-    raw_data = raw_data[-plot_val_count:]
 
+
+def some_callback(address: str, *osc_arguments: List[Any]) -> None:
+    print ('callback triggered')
+    if address not in specified_addresses:
+        print("Received data from {}.".format(address))
+
+
+#Muse Data handlers
 def hsi_handler(address: str,*args):
     global hsi, hsi_string
     hsi = args
@@ -83,50 +95,54 @@ def hsi_handler(address: str,*args):
             hsi_string_new += "Right Ear."        
     if hsi_string!=hsi_string_new:
         hsi_string = hsi_string_new
-        print(hsi_string) 
-
+        print(hsi_string)    
+          
 def abs_handler(address: str,*args):
     global hsi, abs_waves, rel_waves
+    
     wave = args[0][0]
-
+    #print ('wave**', wave, "end**")
+    #print ('args', args)
+    print_data(address, args)
+    
+    
+    #If we have at least one good sensor
     if (hsi[0]==1 or hsi[1]==1 or hsi[2]==1 or hsi[3]==1):
-        if (len(args)==2): 
-            abs_waves[wave] = args[1] 
-        if (len(args)==5): 
+        if (len(args)==2): #If OSC Stream Brainwaves = Average Onle
+            abs_waves[wave] = args[1] #Single value for all sensors, already filtered for good data
+            print ('absolute bracket', abs_waves[wave])
+            print ('args 1', args[1])
+        if (len(args)==5): #If OSC Stream Brainwaves = All Values
             sumVals=0
             countVals=0            
             for i in [0,1,2,3]:
-                if hsi[i]==1: 
+                if hsi[i]==1: #Only use good sensors
                     countVals+=1
                     sumVals+=args[i+1]
             abs_waves[wave] = sumVals/countVals
-
+            
         rel_waves[wave] = math.pow(10,abs_waves[wave]) / (math.pow(10,abs_waves[0]) + math.pow(10,abs_waves[1]) + math.pow(10,abs_waves[2]) + math.pow(10,abs_waves[3]) + math.pow(10,abs_waves[4]))
         update_plot_vars(wave)
-        if (wave==2 and len(plot_data[0])>10): 
+        if (wave==2 and len(plot_data[0])>10): #Wait until we have at least 10 values to start testing
             test_alpha_relative()
 
-
-def update_raw_data():
-    global raw_data, plot_raw_data
-    plot_raw_data.append(raw_data)
-    plot_raw_data = plot_raw_data[-plot_val_count:]
-
+#Audio test
 def test_alpha_relative():
     alpha_relative = rel_waves[2]
     if (alpha_relative>alpha_sound_threshold):
         print ("BEEP! Alpha Relative: "+str(alpha_relative))
-        playsound(sound_file) 
-
+        playsound(sound_file)        
+    
+#Live plot
 def update_plot_vars(wave):
     global plot_data, rel_waves, plot_val_count
     plot_data[wave].append(rel_waves[wave])
     plot_data[wave] = plot_data[wave][-plot_val_count:]
 
 def plot_update(i):
-    global plot_data, raw_data, alpha_sound_threshold
-    # if len(plot_raw_data)>10: # Check to ensure enough raw data points exist
-    #     plt.plot(range(len(plot_raw_data)), plot_raw_data, color='brown', label='Raw EEG')
+    global plot_data
+    global alpha_sound_threshold
+    #print ('plot update triggered')
     if len(plot_data[0])<10:
         return
     plt.cla()
@@ -147,35 +163,44 @@ def plot_update(i):
             colorStr = 'orange'
             waveLabel = 'Gamma'
         plt.plot(range(len(plot_data[wave])), plot_data[wave], color=colorStr, label=waveLabel+" {:.4f}".format(plot_data[wave][len(plot_data[wave])-1]))        
-
-    print ('raw data in plot function**', raw_data, 'end raw***')
-    plt.plot(range(len(raw_data)), raw_data, color='brown', label='Raw EEG')
-
+        
     plt.plot([0,len(plot_data[0])],[alpha_sound_threshold,alpha_sound_threshold],color='black', label='Alpha Sound Threshold',linestyle='dashed')
     plt.ylim([0,1])
     plt.xticks([])
-    plt.title('Mind Monitor - Relative Waves and Raw EEG')
+    plt.title('Mind Monitor - Relative Waves')
     plt.legend(loc='upper left')
-
+    
 def init_plot():
     ani = FuncAnimation(plt.gcf(), plot_update, interval=100)
     plt.tight_layout()
     plt.show()
-
+        
+#Main
 if __name__ == "__main__":
+    #Tread for plot render - Note this generates a warning, but works fine
     thread = threading.Thread(target=init_plot)
     thread.daemon = True
     thread.start()
-
+    
+    #Init Muse Listeners    
     dispatcher = dispatcher.Dispatcher()
     dispatcher.map("/muse/elements/horseshoe", hsi_handler)
-
+    print ('main triggered')
+    
     dispatcher.map("/muse/elements/delta_absolute", abs_handler,0)
     dispatcher.map("/muse/elements/theta_absolute", abs_handler,1)
     dispatcher.map("/muse/elements/alpha_absolute", abs_handler,2)
     dispatcher.map("/muse/elements/beta_absolute", abs_handler,3)
     dispatcher.map("/muse/elements/gamma_absolute", abs_handler,4)
-    dispatcher.map("/muse/eeg", raw_handler)
+
+    #edited
+    specified_addresses = ["/muse/elements/horseshoe"]
+    #dispatcher.set_default_handler(some_callback)
+
+# Set the default handler to the `some_callback()` function.
+#found address /muse/ppg
+    
+
 
 server = osc_server.ThreadingOSCUDPServer((ip, port), dispatcher)
 print("Listening on UDP port "+str(port))
