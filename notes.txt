@@ -9,3 +9,6 @@ cd /mnt/chromeos/MyFiles/Downloads/code/muselseep
 keyringpass
 
 test notes edit on replit
+
+must grant linux access to microphone and open port 5000 udp
+in settings

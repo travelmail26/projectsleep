@@ -1,24 +1,39 @@
 import sounddevice as sd
-from scipy.io.wavfile import write
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.io.wavfile import write
 from scipy.io.wavfile import read
 from scipy.signal import spectrogram
+import threading
+import time
 
 # Choose your desired sample rate and duration
 fs = 44100  # Sample rate
 seconds = 10  # Duration of recording
 
-print("Recording...")
+recording = None  # Placeholder for the recording
 
-recording = sd.rec(int(seconds * fs), samplerate=fs, channels=1)
-for i in range(seconds):
-    sd.wait(1)  # Wait for one second
-    if np.all(recording[i * fs : (i+1) * fs] == 0):
-        print("No sound is being recorded in the last second")
-write('output_mono.wav', fs, recording)  # Save as WAV file 
+def start_recording():
+    global recording
+    recording = sd.rec(int(seconds * fs), samplerate=fs, channels=1)
+    print("Recording...")
 
-print("Mono recording saved as output_mono.wav")
+def stop_recording():
+    global recording
+    #sd.close()
+    sd.stop()
+    write('output_mono.wav', fs, recording)  # Save as WAV file 
+    print("Mono recording saved as output_mono.wav")
+
+# Start recording
+recording_thread = threading.Thread(target=start_recording)
+recording_thread.start()
+
+# Wait for 10 seconds
+time.sleep(seconds)
+
+# Stop recording
+stop_recording()
 
 # Read the .wav file
 samplerate, data = read('output_mono.wav')
